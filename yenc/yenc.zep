@@ -21,7 +21,7 @@ class yEnc
 		var dummy, entry;
 		array text = [], matches = [];
 		int arraySize, code, index = 0, lineSize, headSize, tailSize;
-		string crc, decoded = "", message = "", head, line, tail;
+		string begin, crc, decoded = "", end, head, line, message = "", part, tail, total;
 
 		let this->filename = "";
 		let this->lastError = "";
@@ -36,7 +36,10 @@ class yEnc
 
 		let head = (string)array_shift(text);
 		if preg_match(
-			"#^=ybegin\s+line=(?P<line>\d+)\s+size=(?P<size>\d+)\s+name=(?P<name>[^ ]+)#i",
+			// Single part message.
+			//"#^=ybegin\s+line=(?P<line>\d+)\s+size=(?P<size>\d+)\s+name=(?P<name>[^ ]+).*$#i",
+			"#^=ybegin(?:\s+part=(?P<part>\d+)(?:\s+total=(?P<total>\d+)|)|)\s+line=(?P<line>\d+)\s+size=(?P<size>\d+)\s+name=(?P<name>[^ ]+).*$#i",
+			// =ybegin part=1 total=20 line=128 size=15000000 name=blablabla
 //" corrects colouring of strings in PHPS.
 			head,
 			matches
@@ -44,6 +47,32 @@ class yEnc
 			let headSize = (int)matches["size"];
 			let lineSize = (int)matches["line"];
 			let this->filename = (string)matches["name"];
+			if isset(matches["part"]) {
+				let part = (int)matches["part"];
+				let total = isset(matches["total"]) ? (int)matches["total"] : 0;
+
+				let head = (string)array_shift(text);
+				if unlikely !preg_match(
+					"#=ypart\s+begin=(?P<begin>\d+)\send=(?P<end>\d+)#i",
+					head,
+					matches
+				) {
+					//=ypart begin=1 end=100000
+					let this->lastError = "Part info missing from multi-part message! This indicates probable corruption." . PHP_EOL;
+					if (ignoreErrors == false) {
+						return false;
+					}
+				} else {
+					let begin = (int)matches["begin"];
+					let end = (int)matches["end"];
+				}
+			} else {
+				let begin = 0;
+				let end = 0;
+				let part = 0;
+				let total = 0;
+			}
+
 		} elseif (ignoreErrors == false) {
 			let this->lastError = "Failed to match head" . PHP_EOL . head;
 			return false;
@@ -208,7 +237,7 @@ class yEnc
 		return implode("\r\n", output);
 	}
 
-	public function version()
+	public static function version()
 	{
 		return yEnc::VERSION;
 	}
