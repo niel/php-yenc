@@ -2,9 +2,12 @@ namespace Yenc;
 
 class yEnc
 {
-	public decoded;
+	const VERSION = "1.1.1";
 
-	public encoded;
+	/*
+	 * Text of the most recent error message (if any).
+	 */
+	public lastError;
 
 	/**
 	 * Filename to use for encoding or decoding.
@@ -13,27 +16,20 @@ class yEnc
 		get, set, toString
 	};
 
-	/*
-	 * Text of the most recent error message (if any).
-	 */
-	public lastError;
-
-	public function decode(string! encodedText) -> string|boolean
+	public function decode(string! encodedText, boolean ignoreErrors = false) -> string|boolean
 	{
 		var dummy, entry;
 		array text = [], matches = [];
 		int arraySize, code, index = 0, lineSize, headSize, tailSize;
 		string crc, decoded = "", message = "", head, line, tail;
 
-		let this->decoded = "";
 		let this->filename = "";
 		let this->lastError = "";
-		let this->encoded = encodedText;
 
 		let text = (array)explode("\r\n", trim(encodedText));
 
 		let arraySize = count(text);
-		if unlikely (arraySize < 3) {
+		if unlikely (ignoreErrors == false && arraySize < 3) {
 			let this->lastError = "Data too short. There should be at least three lines.";
 			return false;
 		}
@@ -48,7 +44,7 @@ class yEnc
 			let headSize = (int)matches["size"];
 			let lineSize = (int)matches["line"];
 			let this->filename = (string)matches["name"];
-		} else {
+		} elseif (ignoreErrors == false) {
 			let this->lastError = "Failed to match head" . PHP_EOL . head;
 			return false;
 		}
@@ -62,13 +58,13 @@ class yEnc
 		) {
 			let tailSize = (int)matches["size"];
 			let crc = (string)matches["crc"];
-		} else {
+		} elseif (ignoreErrors == false) {
 			let this->lastError = "Failed to match tail" . PHP_EOL . tail;
 			return false;
 		}
 
 		// Make sure the prefix and suffix filesizes match up.
-		if unlikely headSize != tailSize {
+		if unlikely (headSize != tailSize && ignoreErrors == false) {
 			let dummy = headSize;
 			let message = "Header/trailer file sizes do not match (" . (string)dummy . "/";
 			let dummy = tailSize;
@@ -92,10 +88,10 @@ class yEnc
 				let index++;
 				let code = (int)dummy;
 				if code == 61 { // '='
-					if unlikely (lineSize <= index) {
+					if unlikely (lineSize <= index && ignoreErrors == false) {
 						let this->lastError = "Last character of a line cannot be the escape character. The file is probably corrupt."
 							 . PHP_EOL;
-						this->echoAsHex(line);	// debug
+						//this->echoAsHex(line);	// debug
 						return false;
 					} else {
 						let dummy = line[index];
@@ -116,11 +112,10 @@ class yEnc
 				let decoded .= chr(code);
 			}
 		}
-		let this->decoded = decoded;
 
 		// Make sure the decoded filesize is the same as the size specified in the header.
 		let tailSize = decoded->length();
-		if tailSize != headSize {
+		if (tailSize != headSize && ignoreErrors == false) {
 			let dummy = headSize;
 			let message = "Header file size (" . (string)dummy . ") and actual file size (";
 			let dummy = tailSize;
@@ -130,15 +125,17 @@ class yEnc
 			return false;
 		}
 
-		// Check the CRC value
-		let dummy = sprintf("%X", crc32(this->decoded));
-		if !empty crc && (crc->upper() != (string)dummy) {
-			let this->lastError = "CRC32 checksums do not match (" . crc->upper() . "/" . (string)dummy . "). The file is probably corrupt.";
+		if (ignoreErrors == false) {
+			// Check the CRC value
+			let dummy = sprintf("%X", crc32(decoded));
+			if !empty crc && (crc->upper() != (string)dummy) {
+				let this->lastError = "CRC32 checksums do not match (" . crc->upper() . "/" . (string)dummy . "). The file is probably corrupt.";
 
-			return false;
+				return false;
+			}
 		}
 
-		return decoded;
+			return decoded;
 	}
 
 	public function encode(string! fileData, string! fileName, int! maxLineLen = 128) -> string|boolean
@@ -209,6 +206,11 @@ class yEnc
 		let output[] = (string)sprintf("=yend size=%d crc32=%x", fileData->length(), crc32(fileData));
 
 		return implode("\r\n", output);
+	}
+
+	public function version()
+	{
+		return yEnc::VERSION;
 	}
 
 	protected function createTestString() -> string
