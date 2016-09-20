@@ -36,10 +36,7 @@ class yEnc
 
 		let head = (string)array_shift(text);
 		if preg_match(
-			// Single part message.
-			//"#^=ybegin\s+line=(?P<line>\d+)\s+size=(?P<size>\d+)\s+name=(?P<name>[^ ]+).*$#i",
 			"#^=ybegin(?:\s+part=(?P<part>\d+)(?:\s+total=(?P<total>\d+)|)|)\s+line=(?P<line>\d+)\s+size=(?P<size>\d+)\s+name=(?P<name>[^ ]+).*$#i",
-			// =ybegin part=1 total=20 line=128 size=15000000 name=blablabla
 //" corrects colouring of strings in PHPS.
 			head,
 			matches
