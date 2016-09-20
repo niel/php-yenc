@@ -2,7 +2,7 @@ namespace Yenc;
 
 class yEnc
 {
-	const VERSION = "1.2.0";
+	const VERSION = "1.2.2";
 
 	/*
 	 * Text of the most recent error message (if any).
@@ -20,8 +20,8 @@ class yEnc
 	{
 		var dummy, entry;
 		array text = [], matches = [];
-		int arraySize, code, index = 0, lineSize, headSize, tailSize;
-		string begin, crc, decoded = "", end, head, line, message = "", part, tail, total;
+		int arraySize, code, index = 0, lineSize, headSize, part, tailPart, tailSize;
+		string begin, crc, decoded = "", end, head, line, message = "", tail, total;
 
 		let this->filename = "";
 		let this->lastError = "";
@@ -81,19 +81,33 @@ class yEnc
 		let tail = (string)array_pop(text);
 
 		if preg_match(
-			"#^=yend\s+size=(?P<size>\d+)\s+crc32=(?P<crc>[a-f0-9]+)#i",
+			"#^=yend\s+size=(?P<size>\d+)\s+(?:crc32=(?P<crc>[a-f0-9]+)|part=(?P<parttail>\d+)\s+pcrc32=(?P<pcrc>[a-f0-9]+))$#i",
 			tail,
 			matches
 		) {
 			let tailSize = (int)matches["size"];
-			let crc = (string)matches["crc"];
+			let tailPart = !isset(matches["parttail"]) ? 0 : (int)matches["parttail"];
+
+			if unlikely (part != tailPart) {
+				if (ignoreErrors == false) {
+					let this->lastError = "Multi-part part numbers do not match. This is a violation of the yEnc specification and indicates probable corruption." . PHP_EOL;
+					return false;
+				}
+			}
+
+			if (tailPart == 0) {
+				// No tailPart means no Multi-part
+				let crc = (string)matches["crc"];
+			} else {
+				let crc = (string)matches["pcrc"];
+			}
 		} elseif (ignoreErrors == false) {
 			let this->lastError = "Failed to match tail" . PHP_EOL . tail;
 			return false;
 		}
 
 		// Make sure the prefix and suffix filesizes match up.
-		if unlikely (headSize != tailSize && ignoreErrors == false) {
+		if unlikely (tailPart == 0 && headSize != tailSize && ignoreErrors == false) {
 			let dummy = headSize;
 			let message = "Header/trailer file sizes do not match (" . (string)dummy . "/";
 			let dummy = tailSize;
@@ -142,12 +156,12 @@ class yEnc
 			}
 		}
 
-		// Make sure the decoded filesize is the same as the size specified in the header.
-		let tailSize = decoded->length();
+		// Make sure the decoded filesize is the same as the size specified in the tail, because mulit-parts use tail size.
+		let headSize = decoded->length();
 		if (tailSize != headSize && ignoreErrors == false) {
-			let dummy = headSize;
-			let message = "Header file size (" . (string)dummy . ") and actual file size (";
 			let dummy = tailSize;
+			let message = "Tail size (" . (string)dummy . ") and actual size (";
+			let dummy = headSize;
 			let message .= (string)dummy . ") do not match. The file is probably corrupt.";
 			let this->lastError = message;
 
