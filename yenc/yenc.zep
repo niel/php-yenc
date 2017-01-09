@@ -2,7 +2,7 @@ namespace Yenc;
 
 class yEnc
 {
-	const VERSION = "1.2.2";
+	const VERSION = "1.3.0";
 
 	/*
 	 * Text of the most recent error message (if any).
@@ -18,10 +18,13 @@ class yEnc
 
 	public function decode(string! encodedText, boolean ignoreErrors = false) -> string|boolean
 	{
+		if ignoreErrors {
+			return decodeDirty(encodedText);
+		}
 		var dummy, entry;
 		array text = [], matches = [];
-		int arraySize, code, index = 0, lineSize, headSize, part, tailPart, tailSize;
-		string begin, crc, decoded = "", end, head, line, message = "", tail, total;
+		int arraySize, code, index = 0, lineSize, headSize, part = 0, tailPart, tailSize;
+		string begin = "0", crc, decoded = "", end = "0", head, line, message = "", tail, total = "0";
 
 		let this->filename = "";
 		let this->lastError = "";
@@ -29,7 +32,7 @@ class yEnc
 		let text = (array)explode("\r\n", trim(encodedText));
 
 		let arraySize = count(text);
-		if unlikely (ignoreErrors == false && arraySize < 3) {
+		if unlikely (arraySize < 3) {
 			let this->lastError = "Data too short. There should be at least three lines.";
 			return false;
 		}
@@ -56,9 +59,7 @@ class yEnc
 				) {
 					//=ypart begin=1 end=100000
 					let this->lastError = "Part info missing from multi-part message! This indicates probable corruption." . PHP_EOL;
-					if (ignoreErrors == false) {
-						return false;
-					}
+					return false;
 				} else {
 					let begin = (int)matches["begin"];
 					let end = (int)matches["end"];
@@ -70,7 +71,7 @@ class yEnc
 				let total = 0;
 			}
 
-		} elseif (ignoreErrors == false) {
+		} else {
 			let this->lastError = "Failed to match head" . PHP_EOL . head;
 			return false;
 		}
@@ -86,10 +87,8 @@ class yEnc
 			let tailPart = !isset(matches["parttail"]) ? 0 : (int)matches["parttail"];
 
 			if unlikely (part != tailPart) {
-				if (ignoreErrors == false) {
-					let this->lastError = "Multi-part part numbers do not match. This is a violation of the yEnc specification and indicates probable corruption." . PHP_EOL;
-					return false;
-				}
+				let this->lastError = "Multi-part part numbers do not match. This is a violation of the yEnc specification and indicates probable corruption." . PHP_EOL;
+				return false;
 			}
 
 			if (tailPart == 0) {
@@ -98,13 +97,13 @@ class yEnc
 			} else {
 				let crc = (string)matches["pcrc"];
 			}
-		} elseif (ignoreErrors == false) {
+		} else {
 			let this->lastError = "Failed to match tail" . PHP_EOL . tail;
 			return false;
 		}
 
 		// Make sure the prefix and suffix filesizes match up.
-		if unlikely (tailPart == 0 && headSize != tailSize && ignoreErrors == false) {
+		if unlikely (tailPart == 0 && headSize != tailSize) {
 			let dummy = headSize;
 			let message = "Header/trailer file sizes do not match (" . (string)dummy . "/";
 			let dummy = tailSize;
@@ -128,10 +127,9 @@ class yEnc
 				let index++;
 				let code = (int)dummy;
 				if code == 61 { // '='
-					if unlikely (lineSize <= index && ignoreErrors == false) {
+					if unlikely (lineSize <= index) {
 						let this->lastError = "Last character of a line cannot be the escape character. The file is probably corrupt."
 							 . PHP_EOL;
-						//this->echoAsHex(line);	// debug
 						return false;
 					} else {
 						let dummy = line[index];
@@ -155,7 +153,7 @@ class yEnc
 
 		// Make sure the decoded filesize is the same as the size specified in the tail, because mulit-parts use tail size.
 		let headSize = decoded->length();
-		if (tailSize != headSize && ignoreErrors == false) {
+		if (tailSize != headSize) {
 			let dummy = tailSize;
 			let message = "Tail size (" . (string)dummy . ") and actual size (";
 			let dummy = headSize;
@@ -165,18 +163,81 @@ class yEnc
 			return false;
 		}
 
-		if (ignoreErrors == false) {
-			// Check the CRC value
-			let dummy = sprintf("%X", crc32(decoded));
-			if !empty crc && (crc->upper() != (string)dummy) {
-				let this->lastError = "CRC32 checksums do not match (" . crc->upper() . "/" . (string)dummy . "). The file is probably corrupt.";
+		// Check the CRC value
+		let dummy = sprintf("%X", crc32(decoded));
+		if !empty crc && (crc->upper() != (string)dummy) {
+			let this->lastError = "CRC32 checksums do not match (" . crc->upper() . "/" . (string)dummy . "). The file is probably corrupt.";
 
-				return false;
-			}
+			return false;
 		}
 
 			return decoded;
 	}
+
+	  //
+	  // Decode encoded text ignoring all but most basic errors.
+		//
+		public function decodeDirty(string! encodedText) -> string|boolean
+		{
+			array text = [], matches = [];
+			int code, index = 0, lineSize;
+			string decoded = "", line;
+			var dummy, entry;
+
+			if unlikely !preg_match(
+				"#ybegin.+?([\r\n]{1,2}=ypart.+?)?[\r\n](.+)[\r\n]{1,2}=yend#",
+				encodedText,
+				matches
+			) {
+				let this->lastError = "Failed to find yEncoded text";
+				return false;
+			}
+
+			if unlikely !(matches[2] != "") {
+				let this->lastError = "No text to decode!";
+				return false;
+			} else {
+				let text = (array)explode("\r\n", trim(matches[2]));
+
+				for entry in text {
+					let index = 0;
+					let line = (string)entry;
+					let lineSize = line->length();
+					if unlikely lineSize == 0 {
+						continue;
+					}
+
+					// Decode loop
+					while index < lineSize {
+						let dummy = line[index];
+						let index++;
+						let code = (int)dummy;
+						if code == 61 { // '='
+							if unlikely (lineSize <= index) {
+								continue;
+							} else {
+								let dummy = line[index];
+								let index++;
+								let code = ((int)dummy - 64);
+								if code < 0 {
+									let code += 256;
+								}
+							}
+						}
+
+						let code = (code - 42);
+						if code < 0 {
+							let code += 256;
+						}
+
+						//let dummy = chr(code);
+						let decoded .= chr(code);
+					}
+				}
+			}
+
+			return decoded;
+		}
 
 	public function encode(string! fileData, string! fileName, int! maxLineLen = 128) -> string|boolean
 	{
