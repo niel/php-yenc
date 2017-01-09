@@ -6,7 +6,7 @@ minor=`php -r "echo PHP_VERSION;" | cut -d. -f2`
 phpver="$major.$minor"
 
 fpm -s dir -t deb \
-    -n php$phpver-yenc -v 1.2.2 \
+    -n php$phpver-yenc -v 1.3.0 \
     --depends "php > ${phpver}" \
     --description "php-yenc extension build for PHP ${phpver}" \
     --url 'https://github.com/niel/php-yenc' \
