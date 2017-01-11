@@ -185,20 +185,17 @@ echo "Part: " . matches["part"] . "\n";
 		string decoded = "", line;
 		var dummy, entry;
 
-		if unlikely !preg_match(
-			"#ybegin.+?([\r\n]{1,2}=ypart.+?)?[\r\n](.+)[\r\n]{1,2}=yend#",
-			encodedText,
-			matches
-		) {
-			let this->lastError = "Failed to find yEncoded text";
-			return false;
+		let matches = (array)explode("\r\n", encodedText);
+		let code = 1;
+		if (strpos(matches[1], "=ypart ") === 0) {
+			let code = code + 1;
 		}
+		let text = (array)array_slice(matches, code, -1);
 
-		if unlikely (matches[2] == "") {
+		if unlikely (count(text) < 1) {
 			let this->lastError = "No text to decode!";
 			return false;
 		} else {
-			let text = (array)explode("\r\n", trim(matches[2]));
 
 			for entry in text {
 				let index = 0;
@@ -315,7 +312,7 @@ echo "Part: " . matches["part"] . "\n";
 		return yEnc::VERSION;
 	}
 
-	protected function createTestString() -> string
+	public function createTestString() -> string
 	{
 		//var dummy;
 		string data = "";
