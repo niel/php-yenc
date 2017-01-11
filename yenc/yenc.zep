@@ -2,7 +2,7 @@ namespace Yenc;
 
 class yEnc
 {
-	const VERSION = "1.3.0";
+	const VERSION = "1.3.1";
 
 	/*
 	 * Text of the most recent error message (if any).
@@ -19,7 +19,7 @@ class yEnc
 	public function decode(string! encodedText, boolean ignoreErrors = false) -> string|boolean
 	{
 		if ignoreErrors {
-			return decodeDirty(encodedText);
+			return decode_dirty(encodedText);
 		}
 		var dummy, entry;
 		array text = [], matches = [];
@@ -177,7 +177,7 @@ class yEnc
 	  //
 	  // Decode encoded text ignoring all but most basic errors.
 		//
-		public function decodeDirty(string! encodedText) -> string|boolean
+		public function decode_dirty(string! encodedText) -> string|boolean
 		{
 			array text = [], matches = [];
 			int code, index = 0, lineSize;
