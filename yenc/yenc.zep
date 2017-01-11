@@ -2,7 +2,7 @@ namespace Yenc;
 
 class yEnc
 {
-	const VERSION = "1.3.1";
+	const VERSION = "1.3.0b2";
 
 	/*
 	 * Text of the most recent error message (if any).
@@ -19,7 +19,7 @@ class yEnc
 	public function decode(string! encodedText, boolean ignoreErrors = false) -> string|boolean
 	{
 		if ignoreErrors {
-			return decode_dirty(encodedText);
+			return this->decodeDirty(encodedText);
 		}
 		var dummy, entry;
 		array text = [], matches = [];
@@ -47,7 +47,8 @@ class yEnc
 			let headSize = (int)matches["size"];
 			let lineSize = (int)matches["line"];
 			let this->filename = (string)matches["name"];
-			if isset(matches["part"]) {
+			if isset(matches["part"]) && matches["part"] != "" {
+echo "Part: " . matches["part"] . "\n";
 				let part = (int)matches["part"];
 				let total = isset(matches["total"]) ? (int)matches["total"] : 0;
 
@@ -171,73 +172,73 @@ class yEnc
 			return false;
 		}
 
-			return decoded;
+		return decoded;
 	}
 
-	  //
-	  // Decode encoded text ignoring all but most basic errors.
-		//
-		public function decode_dirty(string! encodedText) -> string|boolean
-		{
-			array text = [], matches = [];
-			int code, index = 0, lineSize;
-			string decoded = "", line;
-			var dummy, entry;
+  //
+  // Decode encoded text ignoring all but most basic errors.
+	//
+	public function decodeDirty(string! encodedText) -> string|boolean
+	{
+		array text = [], matches = [];
+		int code, index = 0, lineSize;
+		string decoded = "", line;
+		var dummy, entry;
 
-			if unlikely !preg_match(
-				"#ybegin.+?([\r\n]{1,2}=ypart.+?)?[\r\n](.+)[\r\n]{1,2}=yend#",
-				encodedText,
-				matches
-			) {
-				let this->lastError = "Failed to find yEncoded text";
-				return false;
-			}
+		if unlikely !preg_match(
+			"#ybegin.+?([\r\n]{1,2}=ypart.+?)?[\r\n](.+)[\r\n]{1,2}=yend#",
+			encodedText,
+			matches
+		) {
+			let this->lastError = "Failed to find yEncoded text";
+			return false;
+		}
 
-			if unlikely !(matches[2] != "") {
-				let this->lastError = "No text to decode!";
-				return false;
-			} else {
-				let text = (array)explode("\r\n", trim(matches[2]));
+		if unlikely (matches[2] == "") {
+			let this->lastError = "No text to decode!";
+			return false;
+		} else {
+			let text = (array)explode("\r\n", trim(matches[2]));
 
-				for entry in text {
-					let index = 0;
-					let line = (string)entry;
-					let lineSize = line->length();
-					if unlikely lineSize == 0 {
-						continue;
-					}
+			for entry in text {
+				let index = 0;
+				let line = (string)entry;
+				let lineSize = line->length();
+				if unlikely lineSize == 0 {
+					continue;
+				}
 
-					// Decode loop
-					while index < lineSize {
-						let dummy = line[index];
-						let index++;
-						let code = (int)dummy;
-						if code == 61 { // '='
-							if unlikely (lineSize <= index) {
-								continue;
-							} else {
-								let dummy = line[index];
-								let index++;
-								let code = ((int)dummy - 64);
-								if code < 0 {
-									let code += 256;
-								}
+				// Decode loop
+				while index < lineSize {
+					let dummy = line[index];
+					let index++;
+					let code = (int)dummy;
+					if code == 61 { // '='
+						if unlikely (lineSize <= index) {
+							continue;
+						} else {
+							let dummy = line[index];
+							let index++;
+							let code = ((int)dummy - 64);
+							if code < 0 {
+								let code += 256;
 							}
 						}
-
-						let code = (code - 42);
-						if code < 0 {
-							let code += 256;
-						}
-
-						//let dummy = chr(code);
-						let decoded .= chr(code);
 					}
+
+					let code = (code - 42);
+					if code < 0 {
+						let code += 256;
+					}
+
+					//let dummy = chr(code);
+					let decoded .= chr(code);
 				}
 			}
-
-			return decoded;
 		}
+
+		return decoded;
+	}
 
 	public function encode(string! fileData, string! fileName, int! maxLineLen = 128) -> string|boolean
 	{
