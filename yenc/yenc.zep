@@ -2,7 +2,7 @@ namespace Yenc;
 
 class yEnc
 {
-	const VERSION = "1.3.0b2";
+	const VERSION = "1.3.0";
 
 	/*
 	 * Text of the most recent error message (if any).
